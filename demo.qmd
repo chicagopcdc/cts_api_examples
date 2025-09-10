@@ -390,3 +390,47 @@ time.sleep(2)
 ```
 
 
+
+## Trials with EGFR positive as an inclusion or exclusion criteria
+
+```{python}
+#| echo: true
+import requests
+import sys
+import json
+import os
+import pandas as pd
+from dotenv import dotenv_values
+import mercury as mr
+import itables
+import time
+
+config = dotenv_values('.env')
+CTS_API_KEY=config['CTS_API_KEY']
+cts_api_header = {"x-api-key": CTS_API_KEY,
+                  "Content-Type": "application/json"}
+
+egfr_pos_trials = {'current_trial_status': 'Active',
+        'sites.recruitment_status' : 'ACTIVE',
+        'primary_purpose': 'TREATMENT',
+        'size':10,
+        'from':0,
+         'biomarkers.nci_thesaurus_concept_id': ['C134501'],
+        'biomarkers.eligibility_criterion':'inclusion'
+      #  'include':includes
+        }          
+r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
+                  json = egfr_pos_trials, headers=cts_api_header)
+
+j = r.json() 
+
+mr.JSON(j) 
+
+egfr_df = pd.DataFrame(j['data'])
+itables.show(egfr_df, column_filters="header",
+  buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
+summary_df = egfr_df[['nct_id', 'official_title']]  
+itables.show(summary_df, column_filters="header",
+  buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
+time.sleep(2)
+```
