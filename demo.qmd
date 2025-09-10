@@ -115,3 +115,41 @@ Other trial level diseases are generally more broad or alternative matches.
 ## Biomarkers
 
 Biomarkers are abstracted as discrete data using NCIt codes.  Biomarkers have been coded on new trials for a couple of years now -- older trials may not have them even if the trial calls has biomarkers as inclucsion/exclusion criteria.
+
+```{python}
+#| echo: true
+import requests
+import sys
+import json
+import os
+import pandas as pd
+from dotenv import dotenv_values
+import mercury as mr
+import itables
+
+config = dotenv_values('.env')
+CTS_API_KEY=config['CTS_API_KEY']
+cts_api_header = {"x-api-key": CTS_API_KEY,
+                  "Content-Type": "application/json"}
+includes = ['nct_id',
+            'diseases',
+            'biomarkers',
+            'prior_therapy',
+            'brief_title'
+            ]
+
+active_treatment_trials_that_are_recruiting = {'current_trial_status': 'Active',
+        'sites.recruitment_status' : 'ACTIVE',
+        'primary_purpose': 'TREATMENT',
+        'size':1,
+        'from':0,
+        'include':includes
+        }          
+r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
+                  json = active_treatment_trials_that_are_recruiting, headers=cts_api_header)
+
+j = r.json()   
+diseases_df = pd.DataFrame(j['data'][0]['biomarkers'])
+itables.show(diseases_df, column_filters="header",
+ buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
+```
