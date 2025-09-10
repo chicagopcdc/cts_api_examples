@@ -177,7 +177,7 @@ time.sleep(2)
 
 ## Retrieving a trial by NCT_ID that has prior therapy records
 
-The trial NCT02914405 contains prior therapy terms
+The trial NCT02914405 contains prior therapy terms.  These are shown as a dataframe and as a rather busy digraph.
 
 ```{python}
 #| echo: true
@@ -303,3 +303,90 @@ time.sleep(2)
 #itables.show(diseases_df, column_filters="header",
 # buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
 ```
+
+## Search for AML trials by NCIt code 
+
+Now search for AML trials by NCIt code.
+
+```{python}
+#| echo: true
+import requests
+import sys
+import json
+import os
+import pandas as pd
+from dotenv import dotenv_values
+import mercury as mr
+import itables
+import time
+
+config = dotenv_values('.env')
+CTS_API_KEY=config['CTS_API_KEY']
+cts_api_header = {"x-api-key": CTS_API_KEY,
+                  "Content-Type": "application/json"}
+
+aml_trials = {'current_trial_status': 'Active',
+        'sites.recruitment_status' : 'ACTIVE',
+        'primary_purpose': 'TREATMENT',
+        'size':10,
+        'from':0,
+        'diseases.nci_thesaurus_concept_id': ['C3171'] 
+      #  'include':includes
+        }          
+r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
+                  json = aml_trials, headers=cts_api_header)
+
+j = r.json() 
+
+mr.JSON(j) 
+
+aml_df = pd.DataFrame(j['data'])
+itables.show(aml_df, column_filters="header",
+  buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
+time.sleep(2)
+```
+
+## AML Trials within 100 miles of my location
+
+```{python}
+#| echo: true
+import requests
+import sys
+import json
+import os
+import pandas as pd
+from dotenv import dotenv_values
+import mercury as mr
+import itables
+import time
+
+config = dotenv_values('.env')
+CTS_API_KEY=config['CTS_API_KEY']
+cts_api_header = {"x-api-key": CTS_API_KEY,
+                  "Content-Type": "application/json"}
+
+aml_trials = {'current_trial_status': 'Active',
+        'sites.recruitment_status' : 'ACTIVE',
+        'primary_purpose': 'TREATMENT',
+        'size':10,
+        'from':0,
+        'diseases.nci_thesaurus_concept_id': ['C3171'],
+        'sites.org_coordinates_lat': 41.2749,
+        'sites.org_coordinates_lon': -96.0212,
+        'sites.org_coordinates_dist': '100 mi'
+      #  'include':includes
+        }          
+r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
+                  json = aml_trials, headers=cts_api_header)
+
+j = r.json() 
+
+mr.JSON(j) 
+
+aml_df = pd.DataFrame(j['data'])
+itables.show(aml_df, column_filters="header",
+  buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
+time.sleep(2)
+```
+
+
