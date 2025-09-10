@@ -3,6 +3,7 @@ title: CTS API Introduction and Demo
 format: 
   html:
     code-fold: true
+    page-layout: full
 
 author: 
   name: Hubert Hickman
@@ -19,13 +20,25 @@ The Cancer Clinical Trials Search API <https://www.cancer.gov/syndication/api> i
 * CTS API Helpful links:
     + Swagger page - <https://clinicaltrialsapi.cancer.gov/doc>
     + You will need an API key - signup for a key here : <https://clinicaltrialsapi.cancer.gov/signin>
-    + Rate limits for standard key 1,000 requests/day and 10 requests/sec ** (it is slower, IMHO)
+    + Rate limits for standard 1 request per second 
     + Maximum number of trials returned per request is 50.
+* Searching is supported via POST or GET.  I typicall use POST for convenience.    
+* Searching by code, strings, geolocation, and much much more. 
+* Has both unstructured and structured eligibility criteria.  
+
+## EVS API {.smaller}   
+NCI's Enterprise Vocabulary Services provides several tools and downloads of the National Institute Thesaurus. 
+
 * NCI Thesaurus Helpful links:
     + EVS Explore (defaults to NCIt) <https://evsexplore.semantics.cancer.gov/evsexplore/welcome>
     + EVS API : <https://evsexplore.semantics.cancer.gov/evsexplore/evsapi>
         - No API key required
         - Will timeout if too much activity (need sleep/backoff timing code)
+    + NCIt releases are available as for download as well as TSV and OWL files.  
+        - <https://evs.nci.nih.gov/evs-download/thesaurus-downloads>
+    + I have used the TSV extensively in my work (computing the transitive closure of NCIt digraph and enumerating all the paths in a database table - it speeds up inheritance computations)
+    + TSV file is a subset of the OWL representation.  
+    
 
 ## Simple Example  {.smaller}
 
@@ -40,6 +53,8 @@ import os
 import pandas as pd
 from dotenv import dotenv_values
 import mercury as mr
+import time 
+
 config = dotenv_values('.env')
 CTS_API_KEY=config['CTS_API_KEY']
 cts_api_header = {"x-api-key": CTS_API_KEY,
@@ -63,7 +78,7 @@ r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
 
 j = r.json()   
 mr.JSON(j)
-
+time.sleep(2)
 ```
 ## Diseases
 
@@ -79,6 +94,7 @@ import pandas as pd
 from dotenv import dotenv_values
 import mercury as mr
 import itables
+import time
 
 config = dotenv_values('.env')
 CTS_API_KEY=config['CTS_API_KEY']
@@ -104,10 +120,11 @@ r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
 j = r.json()   
 diseases_df = pd.DataFrame(j['data'][0]['diseases'])
 itables.show(diseases_df, column_filters="header")
+time.sleep(2)
 ```
 
 TRIAL level diseases are those coded to the trial by clinical trial abstractors at NCI.
-TREE level diseases go 'up' the NCIt
+TREE level diseases go 'up' the NCIt digraph.
 
 Lead disease is/are the most focused trial level disease for the trial.
 Other trial level diseases are generally more broad or alternative matches.
@@ -115,6 +132,8 @@ Other trial level diseases are generally more broad or alternative matches.
 ## Biomarkers
 
 Biomarkers are abstracted as discrete data using NCIt codes.  Biomarkers have been coded on new trials for a couple of years now -- older trials may not have them even if the trial calls has biomarkers as inclucsion/exclusion criteria.
+
+As with diseases, the TREE terms go 'up' the NCIt digraph.   Note that NCIt is a multiaxial hierarchy, and hence you may ≥ 1 parent node.
 
 ```{python}
 #| echo: true
@@ -126,6 +145,7 @@ import pandas as pd
 from dotenv import dotenv_values
 import mercury as mr
 import itables
+import time
 
 config = dotenv_values('.env')
 CTS_API_KEY=config['CTS_API_KEY']
@@ -149,7 +169,137 @@ r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
                   json = active_treatment_trials_that_are_recruiting, headers=cts_api_header)
 
 j = r.json()   
-diseases_df = pd.DataFrame(j['data'][0]['biomarkers'])
-itables.show(diseases_df, column_filters="header",
+biomarkers_df = pd.DataFrame(j['data'][0]['biomarkers'])
+itables.show(biomarkers_df, column_filters="header",
  buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
+time.sleep(2)
+```
+
+## Retrieving a trial by NCT_ID that has prior therapy records
+
+The trial NCT02914405 contains prior therapy terms
+
+```{python}
+#| echo: true
+import requests
+import sys
+import json
+import os
+import pandas as pd
+from dotenv import dotenv_values
+import mercury as mr
+import itables
+import time
+import networkx as nx
+import graphviz
+import matplotlib.pyplot as plt
+
+plt.clf()
+
+config = dotenv_values('.env')
+CTS_API_KEY=config['CTS_API_KEY']
+cts_api_header = {"x-api-key": CTS_API_KEY,
+                  "Content-Type": "application/json"}
+
+# No 'includes' so get everything 
+
+trial_ids = {
+        'nct_id': ['NCT02914405']
+        }          
+
+r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
+                  json = trial_ids, headers=cts_api_header)
+
+j = r.json()  
+mr.JSON(j) 
+time.sleep(2)
+prior_therapy_df = pd.DataFrame(j['data'][0]['prior_therapy'])
+itables.show(prior_therapy_df, column_filters="header",
+ buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
+
+# Now set up the graph for display
+# set node 
+node_label_dict = {}
+node_color_dict = {}
+node_size_dict = {}
+
+G = nx.DiGraph()
+prior_therapy_df['node_label'] =  prior_therapy_df['nci_thesaurus_concept_id'] + '\n'+ prior_therapy_df['name']
+
+trial_pt_df = prior_therapy_df[prior_therapy_df['inclusion_indicator'] == 'TRIAL']
+
+for index, pt in prior_therapy_df.iterrows():
+    node_label_dict[str(pt['nci_thesaurus_concept_id'])] = str(pt['node_label'])
+
+    if str(pt['inclusion_indicator']) == 'TRIAL':
+        node_color_dict[str(pt['nci_thesaurus_concept_id'])]  = 'green'
+        node_size_dict[str(pt['nci_thesaurus_concept_id'])]  = 1000
+
+    else:
+        node_color_dict[str(pt['nci_thesaurus_concept_id'])] = 'yellow'  
+        node_size_dict[str(pt['nci_thesaurus_concept_id'])]  = 500
+  
+
+    G.add_node(str(pt['nci_thesaurus_concept_id']))
+
+
+    for p in pt['parents']:
+        #print('adding edge ',str(pt['nci_thesaurus_concept_id']), str(p) )
+        G.add_edge(str(pt['nci_thesaurus_concept_id']), str(p))
+
+color_list = []
+node_size_list = []
+for node in G:
+    color_list.append(node_color_dict[node])
+    node_size_list.append(node_size_dict[node])
+
+pos = nx.nx_pydot.graphviz_layout(G, prog="dot")
+#pos = nx.spring_layout(G, k=20.0)
+plt.clf()
+fig = plt.gcf()
+fig.set_size_inches(12,12)
+nx.draw(G, with_labels=True,
+            labels = node_label_dict,
+            node_color = color_list,
+            node_size = node_size_list)
+plt.show()
+plt.savefig('prior_therapy_example.pdf',dpi=300, format = 'pdf' ) 
+
+```
+
+## Retrieving several trials by NCT_ID
+
+Let us now retrieve the information for three trials: NCT05183035,NCT05188170,NCT02914405
+
+```{python}
+#| echo: true
+import requests
+import sys
+import json
+import os
+import pandas as pd
+from dotenv import dotenv_values
+import mercury as mr
+import itables
+import time
+
+config = dotenv_values('.env')
+CTS_API_KEY=config['CTS_API_KEY']
+cts_api_header = {"x-api-key": CTS_API_KEY,
+                  "Content-Type": "application/json"}
+
+# No 'includes' so get everything 
+
+trial_ids = {
+        'nct_id': ['NCT05183035','NCT05188170','NCT02914405']
+        }          
+r = requests.post('https://clinicaltrialsapi.cancer.gov/api/v2/trials',
+                  json = trial_ids, headers=cts_api_header)
+
+j = r.json()  
+mr.JSON(j) 
+time.sleep(2)
+#diseases_df = pd.DataFrame(j['data'][0]['diseases'])
+#itables.show(diseases_df, column_filters="header",
+# buttons=["pageLength", "copyHtml5", "csvHtml5", "excelHtml5"])
 ```
