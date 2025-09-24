@@ -22,7 +22,7 @@ The Cancer Clinical Trials Search API <https://www.cancer.gov/syndication/api> i
     + You will need an API key - signup for a key here : <https://clinicaltrialsapi.cancer.gov/signin>
     + Rate limits for standard 1 request per second 
     + Maximum number of trials returned per request is 50.
-* Searching is supported via POST or GET.  I typicall use POST for convenience.    
+* Searching is supported via POST or GET.  I typically use POST for convenience.    
 * Searching by code, strings, geolocation, and much much more. 
 * Has both unstructured and structured eligibility criteria.  
 
